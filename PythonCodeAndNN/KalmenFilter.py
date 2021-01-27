@@ -1,6 +1,6 @@
 from allinc import * #导入所有库
 
-if __name__ == '__main__':
+def Kalman(Q,R,xmk_1,xk_1,Pmk_1):
 	inv = np.linalg.inv
 	deltat = 1e-3 #1ms
 	A = np.array([
@@ -45,5 +45,7 @@ if __name__ == '__main__':
 		xmk_1 = xmk
 		xk_1 = xk
 		Pmk_1 = Pmk
-		print(xk_1)
+
+if __name__ == '__main__':
+	#Kalman(1,2)
 	print((time.time()-a)*1000/it)
