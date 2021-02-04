@@ -1,3 +1,4 @@
+# coding=UTF-8
 import numpy as np 
 from cv2 import cv2
 import pandas as pd
@@ -13,16 +14,18 @@ import matplotlib.pyplot as plt
 import time
 from functools import wraps
 
-def cvshow(img,time=0):
+def cvsave(name,img,time=0):
     #if  type(img) is not np.uint8:
     #    img=(img*255).astype(np.uint8)
-    #cv2.imwrite('test.png',img)
-    cv2.namedWindow('test',cv2.WINDOW_NORMAL)
-    cv2.imshow('test',img)
-    cv2.moveWindow("test", 100, 800) #？
+    cv2.imwrite(name,img)
     
-    cv2.waitKey(time)
-    cv2.destroyAllWindows() #新加
+    #cv2.namedWindow('test',cv2.WINDOW_NORMAL)
+    #cv2.imshow('test',img)
+    #cv2.moveWindow("test", 100, 800) #？
+    
+    #cv2.waitKey(time)
+    #cv2.destroyAllWindows() #新加
+
 def timefun(fn):
     @wraps(fn)
     def measure_time(*args, **kwargs):
@@ -61,85 +64,11 @@ def readCsv(usecolname,path,sep="	",ifreverse=False,iftranspose=True,iflist=Fals
                 value_list.extend(list(series[i]))
     return value_list
 
-def event2Picture(eventtext = "gun_bullet_gnome.txt", size = (480,640,3)):
-    eventlist = readCsv(["x","y","t","p"],eventtext," ",iftranspose=False)
-    timestamp = list(set(readCsv(["t"],eventtext," ",iftranspose=False,iflist=True)))
-    timestamp.sort()
-    eventlist_copy = copy.deepcopy(eventlist)
-    canvas = np.zeros(size,dtype=np.uint8)
-    canvas.fill(0)
-    white = canvas.copy()
-    for eachtime in range(len(timestamp)):
-        eventlist = [x for x in eventlist_copy if x[2] == timestamp[eachtime]]
-        for each in eventlist:
-            if each[3] == 1:
-                cv2.circle(canvas,(int(each[0]),int(each[1])),1,(0,0,255),1)
-            else:
-                cv2.circle(canvas,(int(each[0]),int(each[1])),1,(255,0,0),1)
-        cvshow(canvas,1)
-        canvas = white.copy()
 
-def video2Event(videoname = "QQ20200509142514.mp4", writefor = "eventsUAV.txt"):
-    video = cv2.VideoCapture(videoname)
-    #处理视频
-    threshold = 40
-    ret,lastframe = video.read()
-    lastframe = cv2.cvtColor(lastframe,cv2.COLOR_BGR2GRAY)
-    event_list = []
-    while True:
-        try:
-            ret, thisframe = video.read()
-            thisframe_color = thisframe.copy()
-            thisframe = cv2.cvtColor(thisframe,cv2.COLOR_BGR2GRAY)
-            thisframe = np.array(thisframe,dtype=np.float32)
-            lastframe = np.array(lastframe,dtype=np.float32)
-            subtract = thisframe - lastframe
-            for y in range(subtract.shape[0]):
-                for x in range(subtract.shape[1]):
-                    if subtract[y][x] >= threshold:
-                        #(x,y,t,p)红色表示p=1，蓝色表示p=-1
-                        event_list.append((x,y,video.get(0)/1000,1))
-                        thisframe_color[y][x][2] = 255
-                        thisframe_color[y][x][1] = thisframe_color[y][x][0] = 0
-                    elif subtract[y][x] <= -threshold:
-                        event_list.append((x,y,video.get(0)/1000,-1))
-                        thisframe_color[y][x][0] = 255
-                        thisframe_color[y][x][1] = thisframe_color[y][x][2] = 0
-                    else:
-                        thisframe_color[y][x][0] = 0
-                        thisframe_color[y][x][1] = thisframe_color[y][x][2] = 0		
-            cv2.imshow("name",thisframe_color)
-            lastframe = thisframe
-            if cv2.waitKey(1) & 0xFF == 27: #27位esc退出键
-                break
-        except:
-            video.release()
-            cv2.destroyAllWindows()
-            with open(writefor,"w+") as f:
-                for event in event_list:
-                    f.write(str(event[0])+","+str(event[1])+","+str(event[2])+","+str(event[3])+"\n")
-            break
+
 
 @timefun
-def createATime(eventlist,timestamp,size):
-    if len(list(eventlist[0])) >= 5:
-        timestamplist = list(set([x for x in eventlist[2] if x == timestamp]))
-        eventlist = np.array(eventlist).T
-        eventlist = [x for x in eventlist if x[2] in timestamplist]
-    else:
-        eventlist = np.array(eventlist).T
-        timestamplist = list(set([x for x in eventlist[2] if x == timestamp]))
-        eventlist = np.array(eventlist).T
-        eventlist = [x for x in eventlist if x[2] in timestamplist]
-    canvas = np.zeros(size,dtype=np.uint8)
-    canvas.fill(0) #没必要带参数吧
-    for each in eventlist:
-        cv2.circle(canvas,(int(each[0]),int(each[1])),1,(255,255,255),1)
-
-    return eventlist,canvas
-
-@timefun
-def createTimeWindows(eventlist,timestampstart,timestampend,size,count):
+def createTimeWindows(eventlist,timestampstart,timestampend,count):
     #如果行数大于5
     
     """
@@ -163,13 +92,13 @@ def createTimeWindows(eventlist,timestampstart,timestampend,size,count):
         else:
             break
     eventlist = eventlist_select
-    
+    """
     canvas = np.zeros(size,dtype=np.uint8)
     canvas.fill(0)
     for each in eventlist:
         cv2.circle(canvas,(int(each[0]),int(each[1])),1,(255,255,255),1) #画点
-
-    return eventlist,canvas,count
+"""
+    return eventlist,count
 
 @timefun
 def dbscan(P,eps=3,minpts=2):
@@ -191,21 +120,7 @@ def dbscan(P,eps=3,minpts=2):
     cluster_list.sort(key = lambda x:x[0],reverse = True)
     return cluster_list
 
-@timefun
-def createCanvas(size,full=0):
-    canvas = np.zeros(size,dtype=np.uint8)
-    canvas.fill(full)
-    return canvas
-#此函数无引用？
-def diff(lastframe,thisframe,mode=1):
-    if mode==0:
-        thisframe = np.array(thisframe,dtype=np.float32)
-        lastframe = np.array(lastframe,dtype=np.float32)
-        subtract = thisframe - lastframe
-        return subtract
-    else:
-        picture = cv2.absdiff(thisframe,lastframe)
-        return picture
+
 
 @timefun
 def eventReader(inputfile,outputfile,iftranspose=False,ifwrite=False):
@@ -244,13 +159,13 @@ def optical_flow(frame1,frame2):
     hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
     rgb = cv2.cvtColor(hsv,cv2.COLOR_HSV2BGR)
     rgb = means_filter(rgb,3)
-    cvshow(rgb)
+    cvsave(rgb)
 import numpy as np
 
 
 def means_filter(input_image, filter_size):
     '''
-    三通道图像均值滤波器：太慢了！
+    三通道图像均值滤波器：太慢了，没用
     :param input_image: 输入图像
     :param filter_size: 滤波器大小
     :return: 输出图像
@@ -271,6 +186,7 @@ def means_filter(input_image, filter_size):
 
     return output_image
 
+
 #角速度列表获取(new)
 def omega_get(input_file):
     gyros = []
@@ -287,10 +203,11 @@ python版:
 输入:
 events:[x,y,t]n  data_type:numpy size:3*n
 omegas:[w_x,w_y,w_z]m data_type:numpy size:3*m
-height,width:图像高宽 int
+tl:int
 输出：
-event_news:[x,y,t]n  data_type:numpy
+event_new:[x,y,t]n  data_type:numpy
 """
+@timefun
 def warp(events, omegas,height,width):
     omega_bar = omegas.mean(axis=0)   
     #omega_bar = omega_bar/(omegas.len()+1) #size:1*3
@@ -298,12 +215,12 @@ def warp(events, omegas,height,width):
     omega_bar = omega_bar*3.14/180
     R = [[1,-omega_bar[-1],omega_bar[1]],[omega_bar[-1],1,-omega_bar[0]],[0,0,1]]  #rodriguez公式简化得到的旋转矩阵 size:3*3
     R = np.array(R)
-    #t0 = events[0][-1]
-    #for event in events:)
-    #	event[-1] -= t0
+    t0 = events[0][-1]
+    for event in events:
+        event[-1] = event[-1] - t0
     #theta = omega_bar.T * events[:][3] # size:3*1 & 1*m   data:[theta_x,theta_y,theta_z]m
-    events_new = np.matmul(events ,R)#3*3 x3*n 自补偿后的事件信息
-    events_new =events_new.astype(int)
+    events_new = np.matmul(R,events.T )#3*3 x3*n 自补偿后的事件信息
+    events_new =events_new.astype(int).T
     event_news = []
     for event in events_new:
         if event[1]>=height or event[0]>=width or event[1]<0 or event[0]<0:
@@ -314,27 +231,91 @@ def warp(events, omegas,height,width):
     return event_news
 
 #egofunction
-def eventCounter(eventlist,canvas):
-	timepic = np.zeros_like(canvas,dtype=np.uint8)
-	for eachevent in eventlist:
-		timepic[int(eachevent[1])][int(eachevent[0])] += 1
-	return timepic
+@timefun
+def eventCounter(eventlist,size):
+    timepic = np.zeros(size,dtype=np.uint8)
+    countpic = np.zeros(size,dtype=np.uint8)
+    for eachevent in eventlist:
+        countpic[int(eachevent[1])][int(eachevent[0])] += 1
+        timepic[int(eachevent[1])][int(eachevent[0])] += eachevent[2]
+    #print(countpic.shape[0])
+    for h in range(countpic.shape[0]):
+        for w in range(countpic.shape[1]):
+            if countpic[h][w] == 0:
+                continue
+            else:
+                timepic[h][w] = timepic[h][w] / countpic[h][w]
+    
+    return countpic,timepic
 
-def dealTimePicture(timepic):
-	#归一化到0-1中
-	maxval = np.max(timepic)
-	minval = np.min(timepic)
-	timepic = (timepic - minval)/(maxval-minval)
-	#添加阈值：大于miu+2sigma的取出来
-	miu = np.mean(timepic)
-	sigma = np.std(timepic)
-	for y in range(timepic.shape[0]):
-		for x in range(timepic.shape[1]):
-			if timepic[y][x] <= miu+2*sigma:
-				timepic[y][x] = 0
-			else:
-				timepic[y][x] = 1	
-	return timepic
+@timefun
+def dealTimePicture(timepic,timelen,threshold=0.98):
+    #归一化到0-1中
+    #maxval = np.max(timepic)
+    #minval = np.min(timepic)
+    miu = np.mean(timepic)
+    timepic = (timepic - miu)/timelen
+    m_timepic = timepic
+    #添加阈值：大于miu+2sigma的取出来
+    miu = np.mean(timepic)
+    sigma = np.std(timepic)
+    threshold = miu+2*sigma
+    for y in range(timepic.shape[0]):
+        for x in range(timepic.shape[1]):
+            if timepic[y][x] <= threshold :
+                timepic[y][x] = 0
+            else:
+                timepic[y][x] = 1	
+    return timepic, m_timepic
+
+def Kalman(Q,R,xmk_1,xk_1,Pmk_1):
+	inv = np.linalg.inv
+	deltat = 1e-3 #1ms
+	A = np.array([
+		[1,0,0,deltat,0,0],
+		[0,1,0,0,deltat,0],
+		[0,0,1,0,0,deltat],
+		[0,0,0,1,0,0],
+		[0,0,0,0,1,0],
+		[0,0,0,0,0,1]
+		])
+	H = np.array([
+		[1,0,0,0,0,0],
+		[0,1,0,0,0,0],
+		[0,0,1,0,0,0]
+		])
+	Q = 1 #未知
+	R = 2 #未知
+	v = np.random.normal(loc=0, scale=Q)
+	w = np.random.normal(loc=0, scale=R)
+	I = np.array([
+		[1,0,0,0,0,0],
+		[0,1,0,0,0,0],
+		[0,0,1,0,0,0],
+		[0,0,0,1,0,0],
+		[0,0,0,0,1,0],
+		[0,0,0,0,0,1]
+		])
+	xmk_1 = np.array([0,0,0,0,0,0]).T #未知
+	xk_1 = np.array([0,0,0,0,0,0]).T #未知
+	Pmk_1 = np.random.normal(loc=0, scale=1, size =6*6).reshape((6,6)) #未知
+	a = time.time()
+	it = 1000
+	for i in range(it):
+		xk = np.dot(A,xk_1) + v
+		zk = np.dot(H,xk)+w
+		xpk = np.dot(A,xmk_1)
+		Ppk = A.dot(Pmk_1).dot(A.T)+Q
+		Kk = Ppk.dot(H.T).dot(inv(H.dot(Ppk).dot(H.T)+R))
+		xmk = xpk + Kk.dot(zk - H.dot(xpk))
+		Pmk = (I - Kk.dot(H)).dot(Ppk).dot((I-Kk.dot(H)).T) + Kk.dot(R).dot(Kk.T)
+
+		xmk_1 = xmk
+		xk_1 = xk
+		Pmk_1 = Pmk
+
+def deepEstMono(f,wreal, w): #尽量不要调函数，会慢
+	return f*wreal/w
 
 def helper():
     print("readCsv(使用列的名称：列表,文件路径,分隔符="	",是否要反转数据=False,是否要转置=True,是否要转换成列表=False)：读取csv文件")

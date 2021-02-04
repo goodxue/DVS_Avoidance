@@ -1,3 +1,4 @@
+# coding=UTF-8
 from utils2 import *
 import cv2
 import numpy as np
@@ -35,28 +36,37 @@ def dealTimePicture(timepic):
 parser = argparse.ArgumentParser()
 parser.add_argument('--kernal_size',
                         type=int,
-                        help="Training batch size.",
+                        help="erode",
                         default=5)
 parser.add_argument('--eps',
                         type=float,
-                        help="Training batch size.",
+                        help="DBSCAN param",
                         default=3)
 parser.add_argument('--minpts',
                         type=int,
-                        help="Training batch size.",
+                        help="DBSCAN param",
                         default=2)
-
+parser.add_argument('--inputpath',
+                        type=str,
+                        help="input path",
+                        default="./data/dvSave-2021_01_15_15_30_09.aedat4")
+parser.add_argument('--outputpath',
+                        type=str,
+                        help="output path",
+                        default="./output/dvSave-2021_01_15_15_30_09")
 args = parser.parse_args()
 
 #helper()
+inputflod = "./data"
 inputdata= "dvSave-2021_01_07_12_46_32.aedat4"
-eventdata = eventReader(inputdata,"testobject.txt",ifwrite=True) #元组[x,y,t,p]
-omegadata = omega_get(inputdata)
+#inputdata = inputflod + inputdata
+eventdata = eventReader(args.inputpath,"testobject.txt",ifwrite=True) #元组[x,y,t,p]
+omegadata = omega_get(args.inputpath)
 print(len(eventdata))
 bbox1 = 0
 timelen = 10000
 f = open("result.txt","w") #
-count = int((eventdata[-1][2]-eventdata[0][2])/timelen)
+count = int((eventdata[-1][2]-eventdata[0][2])/timelen) #时间窗口个数
 print(count)
 v_total = []
 pos_total = []
@@ -64,36 +74,40 @@ pre_img = 0
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 out = cv2.VideoWriter('output.mp4',fourcc,20.0,(346,260)) #width*height
 eventc = 0 #计数
+t1 = time.time()
 for i in range(count):
     #创建时间滑动窗口
     
     print("还差%d次"%(count-i))
-    eventlist, canvas, eventc = createTimeWindows(eventdata,eventdata[0][2]+timelen*i,eventdata[0][2]+timelen*(i+1),(260,346),eventc) #数字串超过文件里面的数值也可以用？
-    #cvshow(canvas)
+    eventlist, eventc = createTimeWindows(eventdata,eventdata[0][2]+timelen*i,eventdata[0][2]+timelen*(i+1),eventc) #数字串超过文件里面的数值也可以用？
+    #cvsave(canvas)
 
     omegalen=int(len(omegadata)/count)
     omegalist = omegadata[i*omegalen:(i+1)*omegalen,:]
     eventlist = np.array(eventlist)
     eventlist = warp(eventlist[:,:3],omegalist,260,346)
     #创建countimage及归一化
-    timepic = eventCounter(eventlist,canvas) #计数后的时间戳图像
+    countpic ,timepic= eventCounter(eventlist,(260,346)) #count image
+    cvsave(args.outputpath+"/count_image"+str(i)+".jpg",countpic)
 
-    timepic = dealTimePicture(timepic) #归一化
+    timepic ,m_timepic= dealTimePicture(timepic,timelen) #归一化
     print(np.sum(timepic))
+    cvsave(args.outputpath+"/mean_timestamp"+str(i)+".jpg",m_timepic)
     
-    #cvshow(timepic*255) #怎么区分是0-1图像还是0-255图像？
 
     #使用腐蚀操作
     kernal = np.ones((args.kernal_size,args.kernal_size),np.uint8)      #调参1
     timepic = cv2.erode(timepic,kernal,iterations=1) #腐蚀
     print(np.sum(timepic))
-    #cvshow(timepic*255)
+    
     image = np.ascontiguousarray(timepic)
     image = np.uint8(timepic)
     image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     image = image * 255
     image = image.astype(np.uint8)
     out.write(image)
+
+    #拟合单个矩形
     """
     if type(pre_img) == type(0):
         pre_img = image
@@ -116,13 +130,13 @@ for i in range(count):
         cv2.line(image,leftbottom,rightbottom,(0,0,255))
         cv2.line(image,rightbottom,topright,(0,0,255))
         #image = cv2.rectangle(image,topleft,rightbottom)
-        cvshow(image)
+        cvsave(image)
         pos = [(x_min+x_max)/2, (y_max+y_min)/2]
         pos_total.append(pos)
     """
 
     #密度聚类创建拟合矩形
-
+    """
     cluster_list = dbscan(timepic,eps = args.eps,minpts = args.minpts)
     cluster_list = [x[1] for x in cluster_list if x[0] >= 5]
     boundingbox = []
@@ -160,19 +174,23 @@ for i in range(count):
         f.write("物体的速度"+str(velocity)+"无人机的逃脱速度"+str(escape_velocity)+'\n')
         #print("物体的速度",velocity,"无人机的逃脱速度",escape_velocity)
         bbox1 = bbox2
+"""
+f.write(args.inputpath+":平均时长"+str((time.time()-t1)/count)+'s \n')
 f.close	()
 out.release()
 cv2.destroyAllWindows()
-plt.subplot(131)
-plt.plot([x[0] for x in pos_total])
-plt.legend(['pos_x'])
-plt.subplot(132)
-plt.plot([x[1] for x in pos_total])
-plt.legend(['pos_y'])
-plt.subplot(133)
-plt.plot([x[2] for x in v_total])
-plt.legend(['z'])
-plt.title('kernel_siez:%s *%s eps:%s minpts:%s'%(args.kernal_size,args.kernal_size,args.eps,args.minpts))
-plt.savefig('./pic3/xy_%s_%s_%s_%s.png'%(args.kernal_size,args.kernal_size,args.eps,args.minpts))
+
+#画图
+#plt.subplot(131)
+#plt.plot([x[0] for x in pos_total])
+#plt.legend(['pos_x'])
+#plt.subplot(132)
+#plt.plot([x[1] for x in pos_total])
+#plt.legend(['pos_y'])
+#plt.subplot(133)
+#plt.plot([x[2] for x in v_total])
+#plt.legend(['z'])
+#plt.title('kernel_siez:%s *%s eps:%s minpts:%s'%(args.kernal_size,args.kernal_size,args.eps,args.minpts))
+#plt.savefig('./pic3/xy_%s_%s_%s_%s.png'%(args.kernal_size,args.kernal_size,args.eps,args.minpts))
 
 #plt.show()
