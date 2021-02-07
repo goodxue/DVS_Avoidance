@@ -1,2 +1,0 @@
-egomotiontest.py包含从开始到聚类之前的相关函数的综合测试代码
-utils2.py包含算法实现的相关函数
