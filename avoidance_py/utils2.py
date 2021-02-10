@@ -108,8 +108,8 @@ def createTimeWin(eventlist,begin,end):
 """
 功能:自运动补偿(new)
 输入:
-events:[x,y,t]n  data_type:numpy size:3*n
-omegas:[w_x,w_y,w_z]m data_type:numpy size:3*m
+events:[x,y,t]n  data_type:numpy size:n*3
+omegas:[w_x,w_y,w_z]m data_type:numpy size:m*3
 tl:int
 输出：
 event_new:[x,y,t]n  data_type:numpy
@@ -120,22 +120,42 @@ def warp(events, omegas,height,width):
     #omega_bar = omega_bar/(omegas.len()+1) #size:1*3
     #omega_bar = np.array(omega_bar)
     omega_bar = omega_bar*3.14/180
-    R = [[1,-omega_bar[-1],omega_bar[1]],[omega_bar[-1],1,-omega_bar[0]],[0,0,1]]  #rodriguez公式简化得到的旋转矩阵 size:3*3
-    R = np.array(R)
+    event_news = []
+    #R = [[1,-omega_bar[-1],omega_bar[1]],[omega_bar[-1],1,-omega_bar[0]],[0,0,1]]  #rodriguez公式简化得到的旋转矩阵 size:3*3
+    #R = np.array(R)
     t0 = events[0][-1]
     for event in events:
         event[-1] = event[-1] - t0
-    #theta = omega_bar.T * events[:][3] # size:3*1 & 1*m   data:[theta_x,theta_y,theta_z]m
-    events_new = np.matmul(events ,R)#3*3 x3*n 自补偿后的事件信息
-    events_new =events_new.astype(int)#.T
+    a = events[:,2]
+    a = a.reshape((-1,1))
+    omega_bar = omega_bar.reshape((1,3))
+    thetas = np.matmul(a,omega_bar)# size:n*1x1*3 = n*3   data:[theta_x,theta_y,theta_z]n
+    thetas = thetas*1e-6
+    for i in range(len(events)):
+        R = cv2.Rodrigues(thetas[i,:])
+        R = R[0]
+        R[2][:] = [0,0,1]
+        b = events[i][:].reshape(1,3)
+        events_new = np.matmul(R,b.T)
+        events_new =events_new.astype(int).T
+        if events_new[0][1]>=height or events_new[0][0]>=width or events_new[0][1]<0 or events_new[0][0]<0:
+            continue
+        else:
+            event_news.append(events_new)
+    event_news = np.array(event_news)
+    event_news = event_news.reshape(-1,3)
+    return event_news
+    """
+    events_new = np.matmul(R,events.T)#3*3 x3*n 自补偿后的事件信息
+    events_new =events_new.astype(int).T
     event_news = []
     for event in events_new:
         if event[1]>=height or event[0]>=width or event[1]<0 or event[0]<0:
             continue
         else:
             event_news.append(event)
-    event_news = np.array(event_news)
-    return event_news
+     """       
+
 
 #产生countimage 和timeimage
 @timefun
