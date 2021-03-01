@@ -10,6 +10,7 @@
 > * `models/shuffleNetV2Config.py`：网络基本组元
 > * `train_TR.py`：训练相机外部矩阵
 > * `CoordinateTranspose.py`：将像素投影到世界坐标
+> * `Test_deep&kalmen.py`：本人负责部分的程序（包含均值滤波）
 
 ## 各函数说明 ##
 

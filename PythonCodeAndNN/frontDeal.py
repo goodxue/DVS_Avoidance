@@ -16,7 +16,7 @@ def createTimeWin(eventlist,begin,end):
 def generateCountImage(canvas,eventlist,norm=False,trans =1):
 	for point in eventlist:
 		#listi[int(point[0])][int(point[1])].append(point[2]/100000000)
-		canvas[int(point[0]),int(point[1])] += 1
+		canvas[int(point[0]),int(point[1])] += 255
 	if norm:
 		canvas = (canvas-np.min(canvas))/(np.max(canvas)-np.min(canvas))
 	if trans:
@@ -34,7 +34,7 @@ def constructTimeImage(listi,canvas):
 
 if __name__ == '__main__':
 	datadir = "DatasetTXT/"
-	eventlist = readCsv(["x","y","t","p"],datadir+"dvSave-2021_01_15_15_34_46.txt"," ",True,True,False)
+	eventlist = readCsv(["x","y","t","p"],datadir+"dvSave-2021_01_15_15_39_21.txt"," ",True,True,False)
 	mintime,maxtime = np.min(eventlist[2]),np.max(eventlist[2])
 	slice_time = 100
 	deltatime = (maxtime-mintime)/slice_time
@@ -45,6 +45,7 @@ if __name__ == '__main__':
 		start = int(mintime + t*deltatime)
 		end = int(mintime + (t+1)*deltatime)
 		eventlist2 = createTimeWin(eventlist,start,end)
+		print(eventlist2.shape)
 		canvas = generateCountImage(canvas,eventlist2)
 		#Timage,meanT = constructTimeImage(listi,canvas)
 		cvshow(canvas)

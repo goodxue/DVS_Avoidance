@@ -34,5 +34,6 @@ if __name__ == '__main__':
 	a = time.time()
 	for it in range(1000):
 		for point in points:
-			D2toD3(point[0],point[1],point[-1],inner_matrix,outer_matrix)
+			print(D2toD3(point[0],point[1],point[-1],inner_matrix,outer_matrix)) #像素x像素y真实z内外
+		exit()
 	print(1000*(time.time()-a)/1000)
