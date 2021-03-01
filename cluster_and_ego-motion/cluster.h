@@ -5,46 +5,63 @@
 #include <sstream>
 #include <fstream>
 #include <vector>
+#include <set>
 #include <ctime>
 #include <cstdlib>
 #include <limits>
 #include <cmath>
 #include <stack>
 #include "opencv2/opencv.hpp"
+#include "dbscan.h"
 
-class point{
+class PreCluster
+{
 public:
-    float x;
-    float y;
-    int cluster=0;
-    int pointType=1;//1 noise 2 border 3 core
-    int pts=0;//points in MinPts
-    std::vector<int> corepts;
-    int visited = 0;
-    point (){}
-    point (float a,float b,int c){
-        x = a;
-        y = b;
-        cluster = c;
+    cv::Point2f center;
+    float radius;
+    float operator [](int i) const
+    {
+        if(i==0)
+            return center.y;
+        else
+            return center.x;
+    }
+
+};
+
+/*
+ * optical flow
+class Vec2f : public cv::Vec2f{
+public:
+    Vec2f(float a, float b) : cv::Vec2f(a,b){}
+    bool operator < (const cv::Vec2f& p) const{
+        if ((*this)[0] < p[0])return true;
+        if ((*this)[0] > p[0])return false;
+        if ((*this)[1] < p[1])return true;
+        return false;
     }
 };
+*/
+
 
 class Cluster
 {
     public:
-        Cluster(float threshold, cv::Mat Optical_flow, cv::Mat Time_image, float wp, float wv, float wrho);
+        Cluster(float threshold, int MinPts);
         virtual ~Cluster();
-        std::vector<std::vector<cv::Point> > cluster(cv::Mat img, float threshold, int MinPts);
+        std::vector<std::vector<cv::Point> > cluster(cv::Mat &Normalized_time_image, cv::Mat& Time_image);
+
 
     protected:
 
     private:
+        int MinPts;
         float threshold;
-        float wp, wv, wrho;
         cv::Mat OpticalFlow;
         cv::Mat Timeimage;
-        std::vector<point> img2point(cv::Mat img);
-        float Cost(point a, point b);
+        std::vector<std::vector<cv::Point> > img2point(cv::Mat &img);
+        //float distance(PreCluster a, PreCluster b);
+        cv::Mat optical_flow(cv::Mat prev, cv::Mat next, std::vector<cv::Point2f> prev_events, std::vector<cv::Point2f> next_events, int window_size);
 };
 
 #endif // CLUSTER_H

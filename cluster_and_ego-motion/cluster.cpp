@@ -1,12 +1,8 @@
 #include "Cluster.h"
 
-Cluster::Cluster(float threshold, cv::Mat Optical_flow, cv::Mat Time_image, float wp, float wv, float wrho):
+Cluster::Cluster(float threshold, int MinPts):
     threshold(threshold),
-    OpticalFlow(Optical_flow),
-    Timeimage(Time_image),
-    wp(wp),
-    wv(wv),
-    wrho(wrho)
+    MinPts(MinPts)
 {
     //ctor
 }
@@ -16,112 +12,126 @@ Cluster::~Cluster()
     //dtor
 }
 
-float Cluster::Cost(point a,point b){
-    float p, v, t;
-    cv::Mat OpticalFlow = this->OpticalFlow;
-    cv::Mat Timeimage = this->Timeimage;
-    p = sqrt((a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y));
-    cv::Vec2f ofa = OpticalFlow.at<cv::Vec2f>(a.x,a.y);
-    cv::Vec2f ofb = OpticalFlow.at<cv::Vec2f>(b.x,b.y);
-    v = sqrt((ofa[0]-ofb[0])*(ofa[0]-ofb[0])+(ofa[1]-ofb[1])*(ofa[1]-ofb[1]));
-    t = std::fabs(Timeimage.at<float>(a.x,a.y) - Timeimage.at<float>(b.x,b.y));
-    return this->wp*p+this->wv*v+this->wrho*t;
+std::vector< std::vector<cv::Point> > Cluster::img2point(cv::Mat &img)
+{
+    std::vector< std::vector<cv::Point> > result;
+    for(int r=0;r<img.rows;r++)
+    {
+        for(int c=0;c<img.cols;c++)
+        {
+            int id = img.at<uchar>(r,c);
+            if(id > result.size())
+            {
+                for(int n=result.size(); n<id;n++)
+                {
+                    std::vector<cv::Point> newclass;
+                    result.push_back(newclass);
+                }
+                result[id-1].push_back(cv::Point(c, r));
+            }
+            else if(id>0 && id<=result.size())
+                result[id-1].push_back(cv::Point(c, r));
+        }
+    }
+    return result;
 }
 
-std::vector<point> Cluster::img2point(cv::Mat img){
-    std::vector<point> points;
-    int i = 1;
-    for(int r=0;r<img.rows;r++){
-        for(int c=0;c<img.cols;c++){
-            if(img.at<float>(r,c)>1e-6)
-                points.push_back(point(r,c,i++));
-        }
-    }
-    return points;
+float distance(PreCluster a, PreCluster b)
+{
+    double dx = a.center.x - b.center.x;
+    double dy = a.center.y - b.center.y;
+    return (float)(sqrt(dx*dx+dy*dy) - a.radius - b.radius);
 }
+               
 
-std::vector< std::vector<cv::Point> > Cluster::cluster(cv::Mat img, float threshold, int MinPts){
-    std::vector<point> dataset;
-    dataset = img2point(img);
-    int len = dataset.size();
-    //calculate pts
-    std::cout<<"calculate pts"<<std::endl;
-    for(int i=0;i<len;i++){
-        for(int j=i+1;j<len;j++){
-            if(Cost(dataset[i],dataset[j])<threshold)
-                dataset[i].pts++;
-                dataset[j].pts++;
-        }
-    }
-    //core point
-    std::cout<<"core point "<<std::endl;
-    std::vector<point> corePoint;
-    for(int i=0;i<len;i++){
-        if(dataset[i].pts>=MinPts) {
-            dataset[i].pointType = 3;
-            corePoint.push_back(dataset[i]);
-        }
-    }
-    std::cout<<"joint core point"<<std::endl;
-    //joint core point
-    for(int i=0;i<corePoint.size();i++){
-        for(int j=i+1;j<corePoint.size();j++){
-            if(Cost(corePoint[i],corePoint[j])<threshold){
-                corePoint[i].corepts.push_back(j);
-                corePoint[j].corepts.push_back(i);
-            }
-        }
-    }
-    for(int i=0;i<corePoint.size();i++){
-        std::stack<point*> ps;
-        if(corePoint[i].visited == 1) continue;
-        ps.push(&corePoint[i]);
-        point *v;
-        while(!ps.empty()){
-            v = ps.top();
-            v->visited = 1;
-            ps.pop();
-            for(int j=0;j<v->corepts.size();j++){
-                if(corePoint[v->corepts[j]].visited==1) continue;
-                corePoint[v->corepts[j]].cluster = corePoint[i].cluster;
-                corePoint[v->corepts[j]].visited = 1;
-                ps.push(&corePoint[v->corepts[j]]);
-            }
-        }
-    }
-    std::cout<<"border point,joint border point to core point"<<std::endl;
-    //border point,joint border point to core point
-    for(int i=0;i<len;i++){
-        if(dataset[i].pointType==3) continue;
-        for(int j=0;j<corePoint.size();j++){
-            if(Cost(dataset[i],corePoint[j])<threshold) {
-                dataset[i].pointType = 2;
-                dataset[i].cluster = corePoint[j].cluster;
-                break;
-            }
-        }
-    }
-    std::cout<<"output"<<std::endl;
-    //output
+std::vector< std::vector<cv::Point> > Cluster::cluster(cv::Mat &Normalized_time_image, cv::Mat& Time_image)
+{
+    std::vector< std::vector<unsigned int> > output_id;
+    std::vector< std::vector<cv::Point> > pre_point;
     std::vector< std::vector<cv::Point> > output;
-    for(int i=0;i<len;i++){
-        if(dataset[i].pointType == 2){
-            if(dataset[i].cluster > output.size()){
-                std::vector<cv::Point> newvec;
-                newvec.push_back(cv::Point(dataset[i].x,dataset[i].y));
-                output.push_back(newvec);
-            }
-            else
-                output[dataset[i].cluster].push_back(cv::Point(dataset[i].x,dataset[i].y));
-        }
+    //std::vector<Point> dataset;
+    cv::Mat pre_ids;
+    cv::connectedComponents(Normalized_time_image, pre_ids);
+    pre_ids.convertTo(pre_ids, CV_8U);
+
+    //this->Timeimage = Time_image;
+    pre_point = this->img2point(pre_ids);
+    std::vector<PreCluster> clusters;
+    for(int i=0; i<pre_point.size(); i++)
+    {
+        PreCluster pre_cluster;
+        cv::minEnclosingCircle(pre_point[i], pre_cluster.center, pre_cluster.radius);
+        clusters.push_back(pre_cluster);
     }
-    for(int i=0;i<corePoint.size();i++){
-        if(corePoint[i].cluster > output.size()){
-            std::vector<cv::Point> newvec;
-            newvec.push_back(cv::Point(corePoint[i].x,corePoint[i].y));
-            output.push_back(newvec);
-        }
-        else
-            output[corePoint[i].cluster].push_back(cv::Point(corePoint[i].x,corePoint[i].y));
+
+    auto dbscan = DBSCAN<PreCluster, float>();
+    dbscan.Run(&clusters, 2, 200.0f, 5, distance);
+    output_id = dbscan.Clusters;
+    for(std::vector< std::vector<unsigned int> >::iterator iter = output_id.begin(); iter!=output_id.end(); iter++)
+    {
+        std::vector<cv::Point> newclass;
+        for(std::vector<unsigned int>::iterator it = (*iter).begin(); it!=(*iter).end(); it++)
+            newclass.insert(newclass.end(), pre_point[*it].begin(), pre_point[*it].end());
+        output.push_back(newclass);
     }
+
+    /* save
+    std::ofstream fs;
+    fs.open("D://1.txt",std::ios::in|std::ios::ate);
+    int maxx=0, maxy=0, minx=500, miny=500;
+
+    if(output.size()==0)
+        fs<<std::endl;
+    else
+    {
+        for(std::vector<unsigned int>::iterator iter = output[0].begin(); iter!=output[0].end(); iter++)
+        {
+            if(maxx<(int)eventpoint[*iter][0])
+                maxx = (int)eventpoint[*iter][0];
+            if(maxy<(int)eventpoint[*iter][1])
+                maxy = (int)eventpoint[*iter][1];
+            if(minx>(int)eventpoint[*iter][0])
+                minx = (int)eventpoint[*iter][0];
+            if(miny>(int)eventpoint[*iter][1])
+                miny = (int)eventpoint[*iter][1];
+        }
+        //fs<<maxy-miny<<" "<<maxx-minx<<" "<<miny<<" "<<minx<<std::endl;
+    }
+    cv::rectangle(Time_image, cv::Point(miny, minx), cv::Point(maxy, maxx), cv::Scalar(1), 5);
+*/
+    //cv::namedWindow("w");
+    //cv::imshow("w", Time_image);
+    //cv::waitKey(1);
+    //std::cout<<output.size()<<std::endl;
+
+    return output;
+}
+
+cv::Mat Cluster::optical_flow(cv::Mat prev, cv::Mat next, std::vector<cv::Point2f> prev_events, std::vector<cv::Point2f> next_events, int window_size)
+{
+    std::vector<uchar> status;
+    std::vector<float> err;
+    cv::TermCriteria termcrit(cv::TermCriteria::COUNT|cv::TermCriteria::EPS,20,0.03);
+    prev*=255;next*=255;
+    prev.convertTo(prev, CV_8UC1);
+    next.convertTo(next, CV_8UC1);
+
+    cv::calcOpticalFlowPyrLK(prev, next, prev_events, next_events, status, err, cv::Size(window_size, window_size),
+                            3, termcrit, 0, 0.001);
+    cv::Mat opticalflow(next.rows, next.cols, CV_64FC2);
+    std::vector<cv::Point2f>::iterator iterprev = prev_events.begin();
+    std::vector<cv::Point2f>::iterator iternext = next_events.begin();
+    std::vector<uchar>::iterator iterstatus = status.begin();
+
+    while(iterprev != prev_events.end())
+    {
+        if(*(iterstatus) != '\0')
+            opticalflow.at<cv::Vec2d>(round((*iterprev).y), round((*iterprev).x)) = \
+                    cv::Vec2d((double)((*iternext).x - (*iterprev).x), \
+                              (double)((*iternext).y - (*iterprev).y));
+        iterprev++;
+        iternext++;
+        iterstatus++;
+    }
+    return opticalflow;
 }
